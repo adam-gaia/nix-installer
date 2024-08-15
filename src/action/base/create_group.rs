@@ -1,4 +1,5 @@
 use nix::unistd::Group;
+use std::path::PathBuf;
 use target_lexicon::OperatingSystem;
 use tokio::process::Command;
 use tracing::{span, Span};
@@ -29,11 +30,19 @@ impl CreateGroup {
         match OperatingSystem::host() {
             OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin => (),
             _ => {
-                if !(which::which("groupadd").is_ok() || which::which("addgroup").is_ok()) {
-                    return Err(Self::error(ActionErrorKind::MissingGroupCreationCommand));
-                }
-                if !(which::which("groupdel").is_ok() || which::which("delgroup").is_ok()) {
-                    return Err(Self::error(ActionErrorKind::MissingGroupDeletionCommand));
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if !which::which("synogroup").is_ok() {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyGroupCreationCommand,
+                        ));
+                    }
+                } else {
+                    if !(which::which("groupadd").is_ok() || which::which("addgroup").is_ok()) {
+                        return Err(Self::error(ActionErrorKind::MissingGroupCreationCommand));
+                    }
+                    if !(which::which("groupdel").is_ok() || which::which("delgroup").is_ok()) {
+                        return Err(Self::error(ActionErrorKind::MissingGroupDeletionCommand));
+                    }
                 }
             },
         }
@@ -116,26 +125,43 @@ impl Action for CreateGroup {
                 .map_err(Self::error)?;
             },
             _ => {
-                if which::which("groupadd").is_ok() {
-                    execute_command(
-                        Command::new("groupadd")
-                            .process_group(0)
-                            .args(["-g", &gid.to_string(), "--system", name])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("addgroup").is_ok() {
-                    execute_command(
-                        Command::new("addgroup")
-                            .process_group(0)
-                            .args(["-g", &gid.to_string(), "--system", name])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synogroup").is_ok() {
+                        execute_command(
+                            Command::new("synogroup")
+                                .process_group(0)
+                                .args(["--add", name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyGroupCreationCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(ActionErrorKind::MissingGroupCreationCommand));
+                    if which::which("groupadd").is_ok() {
+                        execute_command(
+                            Command::new("groupadd")
+                                .process_group(0)
+                                .args(["-g", &gid.to_string(), "--system", name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("addgroup").is_ok() {
+                        execute_command(
+                            Command::new("addgroup")
+                                .process_group(0)
+                                .args(["-g", &gid.to_string(), "--system", name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(ActionErrorKind::MissingGroupCreationCommand));
+                    }
                 }
             },
         };
@@ -174,26 +200,43 @@ impl Action for CreateGroup {
                 .map_err(Self::error)?;
             },
             _ => {
-                if which::which("groupdel").is_ok() {
-                    execute_command(
-                        Command::new("groupdel")
-                            .process_group(0)
-                            .arg(name)
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("delgroup").is_ok() {
-                    execute_command(
-                        Command::new("delgroup")
-                            .process_group(0)
-                            .arg(name)
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synogroup").is_ok() {
+                        execute_command(
+                            Command::new("synogroup")
+                                .process_group(0)
+                                .args(["--del", name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyGroupDeletionCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(ActionErrorKind::MissingGroupDeletionCommand));
+                    if which::which("groupdel").is_ok() {
+                        execute_command(
+                            Command::new("groupdel")
+                                .process_group(0)
+                                .arg(name)
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("delgroup").is_ok() {
+                        execute_command(
+                            Command::new("delgroup")
+                                .process_group(0)
+                                .arg(name)
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(ActionErrorKind::MissingGroupDeletionCommand));
+                    }
                 }
             },
         };

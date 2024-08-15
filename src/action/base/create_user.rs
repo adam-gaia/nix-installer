@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use nix::unistd::User;
 use target_lexicon::OperatingSystem;
 use tokio::process::Command;
@@ -41,11 +43,19 @@ impl CreateUser {
         match OperatingSystem::host() {
             OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin => (),
             _ => {
-                if !(which::which("useradd").is_ok() || which::which("adduser").is_ok()) {
-                    return Err(Self::error(ActionErrorKind::MissingUserCreationCommand));
-                }
-                if !(which::which("userdel").is_ok() || which::which("deluser").is_ok()) {
-                    return Err(Self::error(ActionErrorKind::MissingUserDeletionCommand));
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if !which::which("synouser").is_ok() {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserCreationCommand,
+                        ));
+                    }
+                } else {
+                    if !(which::which("useradd").is_ok() || which::which("adduser").is_ok()) {
+                        return Err(Self::error(ActionErrorKind::MissingUserCreationCommand));
+                    }
+                    if !(which::which("userdel").is_ok() || which::which("deluser").is_ok()) {
+                        return Err(Self::error(ActionErrorKind::MissingUserDeletionCommand));
+                    }
                 }
             },
         }
@@ -129,59 +139,82 @@ impl Action for CreateUser {
                     .map_err(Self::error)?;
             },
             _ => {
-                if which::which("useradd").is_ok() {
-                    execute_command(
-                        Command::new("useradd")
-                            .process_group(0)
-                            .args([
-                                "--home-dir",
-                                "/var/empty",
-                                "--comment",
-                                comment,
-                                "--gid",
-                                &gid.to_string(),
-                                "--groups",
-                                &gid.to_string(),
-                                "--no-user-group",
-                                "--system",
-                                "--shell",
-                                "/sbin/nologin",
-                                "--uid",
-                                &uid.to_string(),
-                                "--password",
-                                "!",
-                                name,
-                            ])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("adduser").is_ok() {
-                    execute_command(
-                        Command::new("adduser")
-                            .process_group(0)
-                            .args([
-                                "--home",
-                                "/var/empty",
-                                "-H", // Don't create a home.
-                                "--gecos",
-                                comment,
-                                "--ingroup",
-                                groupname,
-                                "--system",
-                                "--shell",
-                                "/sbin/nologin",
-                                "--uid",
-                                &uid.to_string(),
-                                "--disabled-password",
-                                name,
-                            ])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synouser").is_ok() {
+                        execute_command(
+                            Command::new("synouser")
+                                .process_group(0)
+                                .args([
+                                    "--add", name, "",  // Empty password
+                                    "",  // Empty full name
+                                    "0", // Unexpired account
+                                    "",  // Empty email
+                                    "0", // Synology application priviliges
+                                ])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserCreationCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(ActionErrorKind::MissingUserCreationCommand));
+                    if which::which("useradd").is_ok() {
+                        execute_command(
+                            Command::new("useradd")
+                                .process_group(0)
+                                .args([
+                                    "--home-dir",
+                                    "/var/empty",
+                                    "--comment",
+                                    comment,
+                                    "--gid",
+                                    &gid.to_string(),
+                                    "--groups",
+                                    &gid.to_string(),
+                                    "--no-user-group",
+                                    "--system",
+                                    "--shell",
+                                    "/sbin/nologin",
+                                    "--uid",
+                                    &uid.to_string(),
+                                    "--password",
+                                    "!",
+                                    name,
+                                ])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("adduser").is_ok() {
+                        execute_command(
+                            Command::new("adduser")
+                                .process_group(0)
+                                .args([
+                                    "--home",
+                                    "/var/empty",
+                                    "-H", // Don't create a home.
+                                    "--gecos",
+                                    comment,
+                                    "--ingroup",
+                                    groupname,
+                                    "--system",
+                                    "--shell",
+                                    "/sbin/nologin",
+                                    "--uid",
+                                    &uid.to_string(),
+                                    "--disabled-password",
+                                    name,
+                                ])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(ActionErrorKind::MissingUserCreationCommand));
+                    }
                 }
             },
         }
@@ -208,26 +241,43 @@ impl Action for CreateUser {
                 delete_user_macos(&self.name).await.map_err(Self::error)?;
             },
             _ => {
-                if which::which("userdel").is_ok() {
-                    execute_command(
-                        Command::new("userdel")
-                            .process_group(0)
-                            .arg(&self.name)
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("deluser").is_ok() {
-                    execute_command(
-                        Command::new("deluser")
-                            .process_group(0)
-                            .arg(&self.name)
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synouser").is_ok() {
+                        execute_command(
+                            Command::new("synouser")
+                                .process_group(0)
+                                .args(["--del", &self.name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserDeletionCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(ActionErrorKind::MissingUserDeletionCommand));
+                    if which::which("userdel").is_ok() {
+                        execute_command(
+                            Command::new("userdel")
+                                .process_group(0)
+                                .arg(&self.name)
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("deluser").is_ok() {
+                        execute_command(
+                            Command::new("deluser")
+                                .process_group(0)
+                                .arg(&self.name)
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(ActionErrorKind::MissingUserDeletionCommand));
+                    }
                 }
             },
         };

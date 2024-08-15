@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::process::Stdio;
 
 use nix::unistd::User;
@@ -33,20 +34,28 @@ impl AddUserToGroup {
         let this = Self {
             name: name.clone(),
             uid,
-            groupname,
+            groupname: groupname.clone(),
             gid,
         };
 
         match OperatingSystem::host() {
             OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin => (),
             _ => {
-                if !(which::which("addgroup").is_ok() || which::which("gpasswd").is_ok()) {
-                    return Err(Self::error(ActionErrorKind::MissingAddUserToGroupCommand));
-                }
-                if !(which::which("delgroup").is_ok() || which::which("gpasswd").is_ok()) {
-                    return Err(Self::error(
-                        ActionErrorKind::MissingRemoveUserFromGroupCommand,
-                    ));
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if !which::which("synogroup").is_ok() {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserCreationCommand,
+                        ));
+                    }
+                } else {
+                    if !(which::which("addgroup").is_ok() || which::which("gpasswd").is_ok()) {
+                        return Err(Self::error(ActionErrorKind::MissingAddUserToGroupCommand));
+                    }
+                    if !(which::which("delgroup").is_ok() || which::which("gpasswd").is_ok()) {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingRemoveUserFromGroupCommand,
+                        ));
+                    }
                 }
             },
         }
@@ -228,29 +237,46 @@ impl Action for AddUserToGroup {
                 .map_err(Self::error)?;
             },
             _ => {
-                if which::which("gpasswd").is_ok() {
-                    execute_command(
-                        Command::new("gpasswd")
-                            .process_group(0)
-                            .args(["-a"])
-                            .args([name, groupname])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("addgroup").is_ok() {
-                    execute_command(
-                        Command::new("addgroup")
-                            .process_group(0)
-                            .args([name, groupname])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synogroup").is_ok() {
+                        execute_command(
+                            Command::new("synogroup")
+                                .process_group(0)
+                                .args(["--member", groupname, &name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserCreationCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(Self::error(
-                        ActionErrorKind::MissingAddUserToGroupCommand,
-                    )));
+                    if which::which("gpasswd").is_ok() {
+                        execute_command(
+                            Command::new("gpasswd")
+                                .process_group(0)
+                                .args(["-a"])
+                                .args([name, groupname])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("addgroup").is_ok() {
+                        execute_command(
+                            Command::new("addgroup")
+                                .process_group(0)
+                                .args([name, groupname])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(Self::error(
+                            ActionErrorKind::MissingAddUserToGroupCommand,
+                        )));
+                    }
                 }
             },
         }
@@ -298,29 +324,46 @@ impl Action for AddUserToGroup {
                 .map_err(Self::error)?;
             },
             _ => {
-                if which::which("gpasswd").is_ok() {
-                    execute_command(
-                        Command::new("gpasswd")
-                            .process_group(0)
-                            .args(["-d"])
-                            .args([&name.to_string(), &groupname.to_string()])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
-                } else if which::which("delgroup").is_ok() {
-                    execute_command(
-                        Command::new("delgroup")
-                            .process_group(0)
-                            .args([name, groupname])
-                            .stdin(std::process::Stdio::null()),
-                    )
-                    .await
-                    .map_err(Self::error)?;
+                if PathBuf::from("/etc/synoinfo.conf").is_file() {
+                    if which::which("synogroup").is_ok() {
+                        execute_command(
+                            Command::new("synogroup")
+                                .process_group(0)
+                                .args(["--del", &self.name])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingSynologyUserDeletionCommand,
+                        ));
+                    }
                 } else {
-                    return Err(Self::error(
-                        ActionErrorKind::MissingRemoveUserFromGroupCommand,
-                    ));
+                    if which::which("gpasswd").is_ok() {
+                        execute_command(
+                            Command::new("gpasswd")
+                                .process_group(0)
+                                .args(["-d"])
+                                .args([&name.to_string(), &groupname.to_string()])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else if which::which("delgroup").is_ok() {
+                        execute_command(
+                            Command::new("delgroup")
+                                .process_group(0)
+                                .args([name, groupname])
+                                .stdin(std::process::Stdio::null()),
+                        )
+                        .await
+                        .map_err(Self::error)?;
+                    } else {
+                        return Err(Self::error(
+                            ActionErrorKind::MissingRemoveUserFromGroupCommand,
+                        ));
+                    }
                 }
             },
         };
