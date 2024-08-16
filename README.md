@@ -1,5 +1,6 @@
 # Nix Installer for Synology NAS
 This is a fork of the [Determinate Systems nix-installer](https://github.com/DeterminateSystems/nix-installer) for installing nix on Synology NAS devices.
+See [this github comment](https://github.com/DeterminateSystems/nix-installer/issues/585#issuecomment-2294442375) for discussion behind this fork. If in the future the DetSys installer supports installing on Synology this fork will be archived.
 
 ## Disclaimer
 This tool has been tested on a Synology DS920 running `DSM 7.2.1-69057 Update 5`.
