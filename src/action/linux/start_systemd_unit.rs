@@ -81,7 +81,7 @@ impl Action for StartSystemdUnit {
                     Command::new("systemctl")
                         .process_group(0)
                         .arg("enable")
-                        .arg("--now")
+                        //.arg("--now") // TODO
                         .arg(&unit)
                         .stdin(std::process::Stdio::null()),
                 )

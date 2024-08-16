@@ -634,7 +634,7 @@ async fn enable(unit: &str, now: bool) -> Result<(), ActionErrorKind> {
     command.arg("enable");
     command.arg(unit);
     if now {
-        command.arg("--now");
+        //command.arg("--now"); // TODO
     }
     let output = command
         .output()
@@ -654,7 +654,7 @@ async fn disable(unit: &str, now: bool) -> Result<(), ActionErrorKind> {
     command.arg("disable");
     command.arg(unit);
     if now {
-        command.arg("--now");
+        //command.arg("--now"); // TODO
     }
     let output = command
         .output()
