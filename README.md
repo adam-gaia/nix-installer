@@ -59,6 +59,9 @@ On NAS again
 # See https://github.com/DeterminateSystems/nix-installer/issues/324#issuecomment-1479536235
 NIX_INSTALLER_EXTRA_CONF='filter-syscalls = false' ./nix-installer install
 # Will prompt for sudo password
+
+# Remove the installer
+rm ~/nix-installer
 ```
 
 ### Enable daemon
@@ -104,6 +107,13 @@ Script:
 ```
 systemctl start nix-daemon	
 ```
+
+### Uninstall Nix
+The installer has been patched to provide uninstalling support too.
+```bash
+./nix-installer uninstall
+```
+
 
 # TODO: it would be cool to add a nix garbage collect user-defined script
 
