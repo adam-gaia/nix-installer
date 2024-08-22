@@ -115,5 +115,6 @@ The installer has been patched to provide uninstalling support too.
 ```
 
 
-# TODO: it would be cool to add a nix garbage collect user-defined script
+## TODO
+- It would be cool to add a nix garbage collect user-defined script
 
